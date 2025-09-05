@@ -1,6 +1,8 @@
 package main
 
 import (
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"log"
 	"net/http"
 	"time"
@@ -13,15 +15,27 @@ type Config struct {
 	addr string
 }
 
-// Router setup
-func (app *Application) mount() *http.ServeMux {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /v1/health", app.healthCheckHandler)
-	return mux
+// Router setup using Chi
+func (app *Application) mount() *chi.Mux {
+	r := chi.NewRouter()
+	//Middlewares
+	r.Use(middleware.RequestID)
+	r.Use(middleware.RealIP)
+	r.Use(middleware.Logger)    //Logging middleware
+	r.Use(middleware.Recoverer) //Recover from panics
+
+	//Middleware timeout
+	r.Use(middleware.Timeout(60 * time.Second))
+
+	//Good practice: append api version to each endpoint
+	r.Route("/v1", func(r chi.Router) {
+		r.Get("/health", app.healthCheckHandler)
+	})
+	return r
 }
 
 // Start server logic
-func (app *Application) run(mux *http.ServeMux) error {
+func (app *Application) run(mux *chi.Mux) error {
 	srv := &http.Server{
 		Addr:         app.config.addr, // application port
 		Handler:      mux,             //Define default handler
